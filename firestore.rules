@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if true;
+      allow write: if request.auth.uid == uid;
+      allow create: if request.auth.uid == uid;
+    }
+    match /friendRequests/{docId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.from;
+      allow update, delete: if request.auth != null &&
+        (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+    }
+  }
+}
