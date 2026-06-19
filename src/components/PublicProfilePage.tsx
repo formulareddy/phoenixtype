@@ -4,7 +4,14 @@ import type { UserData } from "../lib/user-store";
 import { AVATARS, PREMIUM_AVATARS, PET_AVATARS, ANIMAL_AVATARS, DEFAULT_AVATAR_ID } from "../lib/avatars";
 import { useAuth } from "../lib/AuthProvider";
 import { sendFriendRequest } from "../lib/friends";
-import { showSuccessNotification, showErrorNotification } from "../lib/notifications";
+import { showSuccessNotification, showErrorNotification, showNoticeNotification } from "../lib/notifications";
+
+const REPORT_REASONS = [
+  "Inappropriate name",
+  "Inappropriate bio",
+  "Inappropriate social links",
+  "Suspected cheating",
+] as const;
 
 
 interface Props {
@@ -38,6 +45,7 @@ export default function PublicProfilePage(props: Props) {
   const [showReportForm, setShowReportForm] = createSignal(false);
   const [reportReason, setReportReason] = createSignal("");
   const [reportComment, setReportComment] = createSignal("");
+  const [charCount, setCharCount] = createSignal(0);
 
   const isOwnProfile = () => store.user?.uid === props.uid;
 
@@ -134,20 +142,46 @@ export default function PublicProfilePage(props: Props) {
   }
 
   async function handleReportSubmit() {
-    if (!reportReason().trim()) return;
+    const reason = reportReason().trim();
+    const comment = reportComment().trim();
+
+    if (!reason) {
+      showNoticeNotification("Please select a valid report reason");
+      return;
+    }
+
+    if (!comment) {
+      showNoticeNotification("Please provide a comment");
+      return;
+    }
+
+    if (reason === "Suspected cheating" && d()?.optOutOfLeaderboards) {
+      showNoticeNotification(
+        "You cannot report this user for suspected cheating as they have opted out of the leaderboards.",
+      );
+      return;
+    }
+
+    if (comment.length > 250) {
+      showNoticeNotification(
+        `Report comment is ${comment.length - 250} character(s) too long`,
+      );
+      return;
+    }
+
     try {
       const report = {
         targetUid: props.uid,
         targetName: d()?.displayName || props.name,
-        reason: reportReason().trim(),
-        comment: reportComment().trim(),
+        reason,
+        comment,
         timestamp: Date.now(),
         reporterUid: store.user?.uid || "anonymous",
       };
       localStorage.setItem("user-reports", JSON.stringify(
         [...JSON.parse(localStorage.getItem("user-reports") || "[]"), report]
       ));
-      showSuccessNotification("User reported. Thank you.");
+      showSuccessNotification("Report submitted. Thank you!");
       setShowReportForm(false);
       setReportReason("");
       setReportComment("");
@@ -258,27 +292,49 @@ export default function PublicProfilePage(props: Props) {
                   <>Request sent</>
                 </Show>
               </button>
-              <button class="profile-action-btn" onClick={() => setShowReportForm(!showReportForm())}>
+              <button class="profile-action-btn" onClick={() => setShowReportForm(true)}>
                 Report user
               </button>
             </div>
             <Show when={showReportForm()}>
-              <div class="profile-report-form">
-                <input
-                  type="text" placeholder="Reason"
-                  value={reportReason()}
-                  onInput={(e) => setReportReason(e.currentTarget.value)}
-                  style="background:var(--sub-alt);color:var(--text);border:1px solid transparent;border-radius:var(--roundness);padding:0.5rem 0.75rem;font-size:0.75rem;outline:none;font-family:inherit;width:100%;"
-                />
-                <textarea
-                  placeholder="Comment (optional)"
-                  value={reportComment()}
-                  onInput={(e) => setReportComment(e.currentTarget.value)}
-                  style="background:var(--sub-alt);color:var(--text);border:1px solid transparent;border-radius:var(--roundness);padding:0.5rem 0.75rem;font-size:0.75rem;outline:none;font-family:inherit;width:100%;min-height:4rem;resize:vertical;margin-top:0.35rem;"
-                />
-                <div class="buttons" style="margin-top:0.35rem;">
-                  <button onClick={handleReportSubmit}>submit report</button>
-                  <button onClick={() => { setShowReportForm(false); setReportReason(""); setReportComment(""); }}>cancel</button>
+              <div class="simple-modal-overlay" onClick={() => { setShowReportForm(false); setReportReason(""); setReportComment(""); setCharCount(0); }}>
+                <div class="simple-modal" style="max-width:800px;" onClick={(e) => e.stopPropagation()}>
+                  <div class="simple-modal-header">
+                    <div class="simple-modal-title">Report a user</div>
+                    <button class="simple-modal-close" onClick={() => { setShowReportForm(false); setReportReason(""); setReportComment(""); setCharCount(0); }}>&times;</button>
+                  </div>
+                  <div class="simple-modal-body">
+                    <p style="color:var(--sub-color);margin-bottom:1rem;">
+                      Please report users responsibly and add comments in English only. Misuse
+                      may result in you losing access to this feature.
+                    </p>
+                    <label style="color:var(--sub-color);font-size:0.75rem;">user</label>
+                    <div style="font-size:1.5rem;margin-bottom:1rem;">{d()?.displayName || props.name}</div>
+                    <label style="color:var(--sub-color);font-size:0.75rem;">reason</label>
+                    <select
+                      value={reportReason()}
+                      onChange={(e) => setReportReason(e.currentTarget.value)}
+                      style="background:var(--sub-alt);color:var(--text);border:1px solid transparent;border-radius:var(--roundness);padding:0.5rem 0.75rem;font-size:0.75rem;outline:none;font-family:inherit;width:100%;margin-bottom:1rem;cursor:pointer;"
+                    >
+                      <option value="">-- Select a reason --</option>
+                      <For each={REPORT_REASONS}>{(reason) =>
+                        <option value={reason}>{reason}</option>
+                      }</For>
+                    </select>
+                    <label style="color:var(--sub-color);font-size:0.75rem;">comment</label>
+                    <textarea
+                      placeholder="Comment"
+                      value={reportComment()}
+                      onInput={(e) => { setReportComment(e.currentTarget.value); setCharCount(e.currentTarget.value.length); }}
+                      maxLength={250}
+                      style="background:var(--sub-alt);color:var(--text);border:1px solid transparent;border-radius:var(--roundness);padding:0.5rem 0.75rem;font-size:0.75rem;outline:none;font-family:inherit;width:100%;min-height:5rem;resize:vertical;line-height:1.2rem;"
+                    />
+                    <div style="color:var(--sub-color);font-size:0.7rem;text-align:right;margin-top:0.25rem;">{charCount()}/250</div>
+                  </div>
+                  <div class="simple-modal-footer">
+                    <button onClick={handleReportSubmit}>Report</button>
+                    <button onClick={() => { setShowReportForm(false); setReportReason(""); setReportComment(""); setCharCount(0); }}>Cancel</button>
+                  </div>
                 </div>
               </div>
             </Show>
