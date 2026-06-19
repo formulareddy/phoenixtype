@@ -332,8 +332,8 @@ export default function PublicProfilePage(props: Props) {
                     <div style="color:var(--sub-color);font-size:0.7rem;text-align:right;margin-top:0.25rem;">{charCount()}/250</div>
                   </div>
                   <div class="simple-modal-footer">
-                    <button onClick={handleReportSubmit}>Report</button>
-                    <button onClick={() => { setShowReportForm(false); setReportReason(""); setReportComment(""); setCharCount(0); }}>Cancel</button>
+                    <button class="sd-btn" onClick={() => { setShowReportForm(false); setReportReason(""); setReportComment(""); setCharCount(0); }}>Cancel</button>
+                    <button class="sd-btn" onClick={handleReportSubmit}>Report</button>
                   </div>
                 </div>
               </div>
